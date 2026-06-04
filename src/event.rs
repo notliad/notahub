@@ -132,18 +132,17 @@ fn handle_input_key(app: &mut App, key: KeyEvent) -> Result<()> {
         .map(|s| matches!(s.action, InputAction::Search))
         .unwrap_or(false);
 
-    // In search input mode, intercept navigation keys (j/k) before they get appended
-    // to the query string.
+    // j/k type normally in the input. Use Up/Down to navigate search results.
     if in_search {
         match key.code {
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyCode::Down => {
                 if !app.search_results.is_empty() {
                     let n = app.search_results.len();
                     app.search_result_idx = (app.search_result_idx + 1) % n;
                 }
                 return Ok(());
             }
-            KeyCode::Up | KeyCode::Char('k') => {
+            KeyCode::Up => {
                 if !app.search_results.is_empty() {
                     let n = app.search_results.len();
                     if app.search_result_idx == 0 {

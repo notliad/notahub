@@ -308,7 +308,7 @@ fn search_enter_navigates_to_project() {
 }
 
 #[test]
-fn search_jk_navigates_results() {
+fn search_arrows_navigate_results() {
     use crossterm::event::KeyCode;
     use notahub::event::handle_event;
 
@@ -327,10 +327,10 @@ fn search_jk_navigates_results() {
     assert!(app.search_results.len() >= 2);
     assert_eq!(app.search_result_idx, 0);
 
-    handle_event(&mut app, ev(KeyCode::Char('j'))).unwrap();
+    handle_event(&mut app, ev(KeyCode::Down)).unwrap();
     assert_eq!(app.search_result_idx, 1);
 
-    handle_event(&mut app, ev(KeyCode::Char('k'))).unwrap();
+    handle_event(&mut app, ev(KeyCode::Up)).unwrap();
     assert_eq!(app.search_result_idx, 0);
 }
 
