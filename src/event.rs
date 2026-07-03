@@ -160,15 +160,84 @@ fn handle_input_key(app: &mut App, key: KeyEvent) -> Result<()> {
     let mut close = false;
     let mut submit = false;
     if let Some(state) = app.input.as_mut() {
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        let len = state.value.len();
         match key.code {
             KeyCode::Esc => close = true,
             KeyCode::Enter => submit = true,
             KeyCode::Backspace => {
-                state.value.pop();
+                if let Some((sel_start, sel_end)) = state.selection.take() {
+                    let start = sel_start.min(sel_end);
+                    let end = sel_start.max(sel_end);
+                    state.value.drain(start..end);
+                    state.cursor = start;
+                } else if state.cursor > 0 {
+                    state.cursor -= 1;
+                    state.value.remove(state.cursor);
+                }
+            }
+            KeyCode::Delete => {
+                if let Some((sel_start, sel_end)) = state.selection.take() {
+                    let start = sel_start.min(sel_end);
+                    let end = sel_start.max(sel_end);
+                    state.value.drain(start..end);
+                    state.cursor = start;
+                } else if state.cursor < len {
+                    state.value.remove(state.cursor);
+                }
+            }
+            KeyCode::Left => {
+                if state.cursor > 0 {
+                    state.cursor -= 1;
+                }
+                state.selection = if shift {
+                    let anchor = state.selection.map(|(a, _)| a).unwrap_or(state.cursor + 1);
+                    Some((anchor, state.cursor))
+                } else {
+                    None
+                };
+            }
+            KeyCode::Right => {
+                if state.cursor < len {
+                    state.cursor += 1;
+                }
+                state.selection = if shift {
+                    let anchor = state.selection.map(|(a, _)| a).unwrap_or(state.cursor - 1);
+                    Some((anchor, state.cursor))
+                } else {
+                    None
+                };
+            }
+            KeyCode::Home => {
+                let old_cursor = state.cursor;
+                state.cursor = 0;
+                if shift {
+                    let anchor = state.selection.map(|(a, _)| a).unwrap_or(old_cursor);
+                    state.selection = Some((anchor, 0));
+                } else {
+                    state.selection = None;
+                }
+            }
+            KeyCode::End => {
+                let old_cursor = state.cursor;
+                state.cursor = len;
+                if shift {
+                    let anchor = state.selection.map(|(a, _)| a).unwrap_or(old_cursor);
+                    state.selection = Some((anchor, len));
+                } else {
+                    state.selection = None;
+                }
             }
             KeyCode::Char(c) => {
                 if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                    state.value.push(c);
+                    if let Some((sel_start, sel_end)) = state.selection.take() {
+                        let start = sel_start.min(sel_end);
+                        let end = sel_start.max(sel_end);
+                        state.value.drain(start..end);
+                        state.cursor = start;
+                    }
+                    state.value.insert(state.cursor, c);
+                    state.cursor += 1;
                 }
             }
             _ => {}
@@ -322,14 +391,22 @@ fn handle_home_key(app: &mut App, key: KeyEvent) -> Result<()> {
             app.go(Screen::Ideas);
             app.ideas_focus = IdeasFocus::List;
         }
-        KeyCode::Tab | KeyCode::BackTab => {
+        KeyCode::Tab => {
             app.home_focus = toggle_home_focus(app.home_focus);
+        }
+        KeyCode::BackTab => {
+            app.home_focus = toggle_home_focus_back(app.home_focus);
+        }
+        KeyCode::F(2) => {
+            rename_focused(app);
         }
         KeyCode::Char('p') | KeyCode::Char('P') => {
             app.input = Some(InputState {
                 label: "New project title".to_string(),
                 value: String::new(),
                 action: InputAction::NewProject,
+                cursor: 0,
+                selection: None,
             });
         }
         KeyCode::Char('i') | KeyCode::Char('I') => {
@@ -337,6 +414,8 @@ fn handle_home_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 label: "New idea title".to_string(),
                 value: String::new(),
                 action: InputAction::NewIdea,
+                cursor: 0,
+                selection: None,
             });
         }
         KeyCode::Char('x') | KeyCode::Char('X') => {
@@ -375,6 +454,13 @@ fn handle_home_key(app: &mut App, key: KeyEvent) -> Result<()> {
 }
 
 fn toggle_home_focus(f: HomeFocus) -> HomeFocus {
+    match f {
+        HomeFocus::Projects => HomeFocus::Ideas,
+        HomeFocus::Ideas => HomeFocus::Projects,
+    }
+}
+
+fn toggle_home_focus_back(f: HomeFocus) -> HomeFocus {
     match f {
         HomeFocus::Projects => HomeFocus::Ideas,
         HomeFocus::Ideas => HomeFocus::Projects,
@@ -446,18 +532,30 @@ fn handle_projects_key(app: &mut App, key: KeyEvent) -> Result<()> {
             app.go(Screen::Ideas);
             app.ideas_focus = IdeasFocus::List;
         }
-        KeyCode::Tab | KeyCode::BackTab => {
+        KeyCode::Tab => {
             app.projects_focus = match app.projects_focus {
                 ProjectsFocus::List => ProjectsFocus::Tasks,
                 ProjectsFocus::Tasks => ProjectsFocus::Notes,
                 ProjectsFocus::Notes => ProjectsFocus::List,
             };
         }
+        KeyCode::BackTab => {
+            app.projects_focus = match app.projects_focus {
+                ProjectsFocus::List => ProjectsFocus::Notes,
+                ProjectsFocus::Tasks => ProjectsFocus::List,
+                ProjectsFocus::Notes => ProjectsFocus::Tasks,
+            };
+        }
+        KeyCode::F(2) => {
+            rename_focused(app);
+        }
         KeyCode::Char('p') | KeyCode::Char('P') => {
             app.input = Some(InputState {
                 label: "New project title".to_string(),
                 value: String::new(),
                 action: InputAction::NewProject,
+                cursor: 0,
+                selection: None,
             });
         }
         KeyCode::Char('t') | KeyCode::Char('T') => {
@@ -467,6 +565,8 @@ fn handle_projects_key(app: &mut App, key: KeyEvent) -> Result<()> {
                     label: "New task title".to_string(),
                     value: String::new(),
                     action: InputAction::NewTask(id),
+                    cursor: 0,
+                    selection: None,
                 });
             } else {
                 app.set_status("Create or select a project first");
@@ -480,6 +580,8 @@ fn handle_projects_key(app: &mut App, key: KeyEvent) -> Result<()> {
                     label: "New note".to_string(),
                     value: String::new(),
                     action: InputAction::NewTaskNote(pid, tid),
+                    cursor: 0,
+                    selection: None,
                 });
             } else if let Some(p) = app.current_project() {
                 if p.tasks.is_empty() {
@@ -538,17 +640,28 @@ fn handle_ideas_key(app: &mut App, key: KeyEvent) -> Result<()> {
             app.projects_focus = ProjectsFocus::List;
         }
         KeyCode::Char('3') => app.go(Screen::Ideas),
-        KeyCode::Tab | KeyCode::BackTab => {
+        KeyCode::Tab => {
             app.ideas_focus = match app.ideas_focus {
                 IdeasFocus::List => IdeasFocus::Notes,
                 IdeasFocus::Notes => IdeasFocus::List,
             };
+        }
+        KeyCode::BackTab => {
+            app.ideas_focus = match app.ideas_focus {
+                IdeasFocus::List => IdeasFocus::Notes,
+                IdeasFocus::Notes => IdeasFocus::List,
+            };
+        }
+        KeyCode::F(2) => {
+            rename_focused(app);
         }
         KeyCode::Char('i') | KeyCode::Char('I') => {
             app.input = Some(InputState {
                 label: "New idea title".to_string(),
                 value: String::new(),
                 action: InputAction::NewIdea,
+                cursor: 0,
+                selection: None,
             });
         }
         KeyCode::Char('n') | KeyCode::Char('N') => {
@@ -558,6 +671,8 @@ fn handle_ideas_key(app: &mut App, key: KeyEvent) -> Result<()> {
                     label: "New note".to_string(),
                     value: String::new(),
                     action: InputAction::NewIdeaNote(id),
+                    cursor: 0,
+                    selection: None,
                 });
             } else {
                 app.set_status("Select or create an idea first");
@@ -652,6 +767,135 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent) -> Result<()> {
 }
 
 // -------------------- move / delete helpers --------------------
+
+fn rename_focused(app: &mut App) {
+    match app.screen {
+        Screen::Home => match app.home_focus {
+            HomeFocus::Projects => {
+                if let Some(p) = app.projects.get(app.home_project_idx) {
+                    let id = p.id;
+                    let title = p.title.clone();
+                    app.input = Some(InputState {
+                        label: format!("Rename project: {title}"),
+                        value: title.clone(),
+                        action: InputAction::RenameProject(id),
+                        cursor: title.len(),
+                        selection: None,
+                    });
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+            HomeFocus::Ideas => {
+                if let Some(i) = app.ideas.get(app.home_idea_idx) {
+                    let id = i.id;
+                    let title = i.title.clone();
+                    app.input = Some(InputState {
+                        label: format!("Rename idea: {title}"),
+                        value: title.clone(),
+                        action: InputAction::RenameIdea(id),
+                        cursor: title.len(),
+                        selection: None,
+                    });
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+        },
+        Screen::Projects => match app.projects_focus {
+            ProjectsFocus::List => {
+                if let Some(p) = app.current_project() {
+                    let id = p.id;
+                    let title = p.title.clone();
+                    app.input = Some(InputState {
+                        label: format!("Rename project: {title}"),
+                        value: title.clone(),
+                        action: InputAction::RenameProject(id),
+                        cursor: title.len(),
+                        selection: None,
+                    });
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+            ProjectsFocus::Tasks => {
+                if let (Some(p), Some(t)) = (app.current_project(), app.current_task()) {
+                    let pid = p.id;
+                    let tid = t.id;
+                    let title = t.title.clone();
+                    app.input = Some(InputState {
+                        label: format!("Rename task: {title}"),
+                        value: title.clone(),
+                        action: InputAction::RenameTask(pid, tid),
+                        cursor: title.len(),
+                        selection: None,
+                    });
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+            ProjectsFocus::Notes => {
+                if let (Some(p), Some(t)) = (app.current_project(), app.current_task()) {
+                    let pid = p.id;
+                    let tid = t.id;
+                    let idx = app.task_note_idx;
+                    if idx < t.notes.len() {
+                        let note = t.notes[idx].clone();
+                        app.input = Some(InputState {
+                            label: "Rename note".to_string(),
+                            value: note.clone(),
+                            action: InputAction::RenameTaskNote(pid, tid, idx),
+                            cursor: note.len(),
+                            selection: None,
+                        });
+                    } else {
+                        app.set_status("No note to rename");
+                    }
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+        },
+        Screen::Ideas => match app.ideas_focus {
+            IdeasFocus::List => {
+                if let Some(i) = app.current_idea() {
+                    let id = i.id;
+                    let title = i.title.clone();
+                    app.input = Some(InputState {
+                        label: format!("Rename idea: {title}"),
+                        value: title.clone(),
+                        action: InputAction::RenameIdea(id),
+                        cursor: title.len(),
+                        selection: None,
+                    });
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+            IdeasFocus::Notes => {
+                if let Some(idea) = app.current_idea() {
+                    let id = idea.id;
+                    let idx = app.idea_note_idx;
+                    if idx < idea.notes.len() {
+                        let note = idea.notes[idx].clone();
+                        app.input = Some(InputState {
+                            label: "Rename note".to_string(),
+                            value: note.clone(),
+                            action: InputAction::RenameIdeaNote(id, idx),
+                            cursor: note.len(),
+                            selection: None,
+                        });
+                    } else {
+                        app.set_status("No note to rename");
+                    }
+                } else {
+                    app.set_status("Nothing to rename");
+                }
+            }
+        },
+        _ => {}
+    }
+}
 
 fn move_in_projects(app: &mut App, delta: i32) {
     match app.projects_focus {
@@ -883,6 +1127,49 @@ fn execute_input(app: &mut App, state: InputState) -> Result<()> {
         InputAction::Search => {
             app.search_query = value.to_string();
             app.refresh_search();
+        }
+        InputAction::RenameProject(id) => {
+            if let Some(p_idx) = app.project_by_id(id) {
+                app.projects[p_idx].title = value.to_string();
+                storage::save_project(&app.data_root, &app.projects[p_idx])?;
+                app.set_status(format!("Renamed project to '{}'", value));
+            }
+        }
+        InputAction::RenameTask(project_id, task_id) => {
+            if let Some(p_idx) = app.project_by_id(project_id) {
+                if let Some(t_idx) = app.task_by_id(p_idx, task_id) {
+                    app.projects[p_idx].tasks[t_idx].title = value.to_string();
+                    storage::save_project(&app.data_root, &app.projects[p_idx])?;
+                    app.set_status(format!("Renamed task to '{}'", value));
+                }
+            }
+        }
+        InputAction::RenameTaskNote(project_id, task_id, note_idx) => {
+            if let Some(p_idx) = app.project_by_id(project_id) {
+                if let Some(t_idx) = app.task_by_id(p_idx, task_id) {
+                    if note_idx < app.projects[p_idx].tasks[t_idx].notes.len() {
+                        app.projects[p_idx].tasks[t_idx].notes[note_idx] = value.to_string();
+                        storage::save_project(&app.data_root, &app.projects[p_idx])?;
+                        app.set_status("Renamed note");
+                    }
+                }
+            }
+        }
+        InputAction::RenameIdea(id) => {
+            if let Some(i_idx) = app.idea_by_id(id) {
+                app.ideas[i_idx].title = value.to_string();
+                storage::save_idea(&app.data_root, &app.ideas[i_idx])?;
+                app.set_status(format!("Renamed idea to '{}'", value));
+            }
+        }
+        InputAction::RenameIdeaNote(idea_id, note_idx) => {
+            if let Some(i_idx) = app.idea_by_id(idea_id) {
+                if note_idx < app.ideas[i_idx].notes.len() {
+                    app.ideas[i_idx].notes[note_idx] = value.to_string();
+                    storage::save_idea(&app.data_root, &app.ideas[i_idx])?;
+                    app.set_status("Renamed note");
+                }
+            }
         }
     }
     Ok(())

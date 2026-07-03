@@ -66,6 +66,11 @@ pub enum InputAction {
     NewIdea,
     NewIdeaNote(Uuid),
     Search,
+    RenameProject(Uuid),
+    RenameTask(Uuid, Uuid),
+    RenameTaskNote(Uuid, Uuid, usize),
+    RenameIdea(Uuid),
+    RenameIdeaNote(Uuid, usize),
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +78,8 @@ pub struct InputState {
     pub label: String,
     pub value: String,
     pub action: InputAction,
+    pub cursor: usize,
+    pub selection: Option<(usize, usize)>,
 }
 
 #[derive(Debug, Clone)]
@@ -246,6 +253,8 @@ impl App {
             label: "Search".to_string(),
             value: String::new(),
             action: InputAction::Search,
+            cursor: 0,
+            selection: None,
         });
     }
 

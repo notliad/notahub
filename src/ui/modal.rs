@@ -43,13 +43,40 @@ pub fn draw_input(state: &InputState, frame: &mut Frame) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    let cursor = state.cursor.min(state.value.len());
+    let value_spans = if let Some((sel_start, sel_end)) = state.selection {
+        let start = sel_start.min(sel_end);
+        let end = sel_start.max(sel_end);
+        let before = &state.value[..start];
+        let selected = &state.value[start..end];
+        let after = &state.value[end..];
+        vec![
+            Span::raw(before.to_string()),
+            Span::styled(
+                selected.to_string(),
+                Style::default()
+                    .bg(ratatui::style::Color::DarkGray)
+                    .fg(ratatui::style::Color::White),
+            ),
+            Span::raw(after.to_string()),
+        ]
+    } else {
+        let before = &state.value[..cursor];
+        let after = &state.value[cursor..];
+        vec![
+            Span::raw(before.to_string()),
+            Span::styled("▏", Style::default().fg(ratatui::style::Color::Cyan)),
+            Span::raw(after.to_string()),
+        ]
+    };
+
     let lines = vec![
         Line::from(""),
-        Line::from(vec![
-            Span::styled(" > ", Style::default().fg(ratatui::style::Color::Yellow)),
-            Span::raw(state.value.clone()),
-            Span::styled("▏", Style::default().fg(ratatui::style::Color::Cyan)),
-        ]),
+        Line::from(
+            std::iter::once(Span::styled(" > ", Style::default().fg(ratatui::style::Color::Yellow)))
+                .chain(value_spans)
+                .collect::<Vec<_>>(),
+        ),
         Line::from(Span::styled(
             "   (enter to confirm · esc to cancel)",
             Style::default().fg(ratatui::style::Color::DarkGray),

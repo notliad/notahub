@@ -422,11 +422,42 @@ fn add_project_via_input_creates_file() {
     let _ = Event::FocusGained;
 }
 
+#[test]
+fn input_shift_home_end_extend_selection_from_cursor() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+    use notahub::event::handle_event;
+
+    let dir = tempdir();
+    let mut app = App::new(dir.path().to_path_buf()).unwrap();
+
+    handle_event(&mut app, ev(KeyCode::Char('p'))).unwrap();
+    for c in "abcdef".chars() {
+        handle_event(&mut app, ev(KeyCode::Char(c))).unwrap();
+    }
+    handle_event(&mut app, ev(KeyCode::Left)).unwrap();
+    handle_event(&mut app, ev(KeyCode::Left)).unwrap();
+
+    handle_event(&mut app, ev_mod(KeyCode::Home, KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(app.input.as_ref().unwrap().selection, Some((4, 0)));
+
+    handle_event(&mut app, ev(KeyCode::Right)).unwrap();
+    handle_event(&mut app, ev(KeyCode::Right)).unwrap();
+    handle_event(&mut app, ev_mod(KeyCode::End, KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(app.input.as_ref().unwrap().selection, Some((2, 6)));
+}
+
 fn ev(code: crossterm::event::KeyCode) -> crossterm::event::Event {
     crossterm::event::Event::Key(crossterm::event::KeyEvent::new(
         code,
         crossterm::event::KeyModifiers::NONE,
     ))
+}
+
+fn ev_mod(
+    code: crossterm::event::KeyCode,
+    modifiers: crossterm::event::KeyModifiers,
+) -> crossterm::event::Event {
+    crossterm::event::Event::Key(crossterm::event::KeyEvent::new(code, modifiers))
 }
 
 
@@ -440,4 +471,3 @@ fn write_file(path: &std::path::Path, content: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, content).unwrap();
 }
-

@@ -26,21 +26,57 @@ pub fn draw(app: &App, area: Rect, frame: &mut Frame) {
         Style::default().fg(ratatui::style::Color::DarkGray)
     };
 
-    let query_text = app.search_query.clone();
-    let cursor = if active { "▏" } else { "" };
-    let p = Paragraph::new(Line::from(vec![
+    let (query_text, cursor_pos, selection) = if let Some(state) = app.input.as_ref() {
+        (
+            state.value.clone(),
+            Some(state.cursor),
+            state.selection,
+        )
+    } else {
+        (app.search_query.clone(), None, None)
+    };
+
+    let mut input_spans: Vec<Span> = vec![
         Span::styled(
             " / ",
             Style::default().fg(ratatui::style::Color::Yellow),
         ),
-        Span::raw(query_text),
-        Span::styled(
-            cursor,
-            Style::default()
-                .fg(ratatui::style::Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]))
+    ];
+
+    if active {
+        let cursor = cursor_pos.unwrap_or(0);
+        let len = query_text.len();
+        if let Some((sel_start, sel_end)) = selection {
+            let start = sel_start.min(sel_end);
+            let end = sel_start.max(sel_end);
+            let before = &query_text[..start];
+            let selected = &query_text[start..end];
+            let after = &query_text[end..];
+            input_spans.push(Span::raw(before.to_string()));
+            input_spans.push(Span::styled(
+                selected.to_string(),
+                Style::default()
+                    .bg(ratatui::style::Color::DarkGray)
+                    .fg(ratatui::style::Color::White),
+            ));
+            input_spans.push(Span::raw(after.to_string()));
+        } else {
+            let before = &query_text[..cursor.min(len)];
+            let after = &query_text[cursor.min(len)..];
+            input_spans.push(Span::raw(before.to_string()));
+            input_spans.push(Span::styled(
+                "▏",
+                Style::default()
+                    .fg(ratatui::style::Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            input_spans.push(Span::raw(after.to_string()));
+        }
+    } else {
+        input_spans.push(Span::raw(query_text));
+    }
+
+    let p = Paragraph::new(Line::from(input_spans))
     .block(
         Block::default()
             .borders(Borders::ALL)
