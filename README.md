@@ -1,9 +1,17 @@
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/5ef57b3f-b165-4d8d-aba8-5d902156c716" />
+
 # notahub
 
 **notahub** is a keyboard-driven TUI for managing projects, tasks, and ideas —
 all stored as plain markdown files.
 
 Everything is a file. No database, no lock-in.
+
+<img width="1904" height="1034" alt="notahub" src="https://github.com/user-attachments/assets/89387708-9305-461e-9343-36fae6b037b0" />
+
+<img width="1904" height="1034" alt="notahub2" src="https://github.com/user-attachments/assets/dd34892c-f51b-4565-93e6-5ba64d830677" />
+
+<img width="1904" height="1034" alt="notahub3" src="https://github.com/user-attachments/assets/c3f301c7-407a-4620-b393-53ad210dc137" />
 
 ## Install
 
